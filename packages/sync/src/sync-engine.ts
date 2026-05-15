@@ -18,6 +18,7 @@ type SyncEvents = {
  */
 export class SyncEngine extends EventEmitter<SyncEvents> {
   private readonly docs = new Map<string, Y.Doc>();
+  private readonly seenUpdates = new Map<string, Set<string>>();
   private readonly persistences = new Map<string, IndexeddbPersistence>();
   private _enabled = false;
   private _state: SyncState = { synced: false, pendingUpdates: 0, connectedPeers: 0 };
@@ -77,7 +78,10 @@ export class SyncEngine extends EventEmitter<SyncEvents> {
     doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === "remote") return; // Don't echo back remote updates
       if (!this._enabled) return;
-
+      const updateKey = Array.from(update).join(",");
+      if (!this.seenUpdates.has(collectionName)) this.seenUpdates.set(collectionName, new Set());
+      if (this.seenUpdates.get(collectionName)!.has(updateKey)) return;
+      this.seenUpdates.get(collectionName)!.add(updateKey);
       this.emit("update:local", { collectionName, update });
       this.network.broadcast({
         type: "sync-update",
